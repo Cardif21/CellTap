@@ -1,0 +1,312 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tap IQ Game</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f7f7f7;
+    }
+
+    #gameContainer {
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2rem;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(4, 80px);
+      grid-template-rows: repeat(4, 80px);
+      gap: 10px;
+      margin: 20px auto;
+      display: none; /* Nascondiamo la griglia finché non parte il gioco */
+    }
+
+    .cell {
+      width: 80px;
+      height: 80px;
+      background-color: #ccc;
+      border: 1px solid #999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .active {
+      background-color: #4caf50;
+    }
+
+    #score {
+      font-size: 1.5rem;
+      margin-top: 10px;
+    }
+
+    #timer {
+      font-size: 1.5rem;
+      margin-top: 10px;
+    }
+
+    #gameOver {
+      font-size: 2rem;
+      color: red;
+      margin-top: 20px;
+      display: none; /* Nascondiamo il messaggio Game Over inizialmente */
+    }
+
+    #startButton,
+    #newGameButton {
+      padding: 10px 20px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 20px;
+    }
+
+    #newGameButton {
+      display: none; /* Nascondiamo il pulsante Start New Game finché il gioco non finisce */
+    }
+
+    #leaderboard {
+      margin-top: 20px;
+    }
+
+    #leaderboardList {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    #newGameFromLeaderboardButton {
+      padding: 10px 20px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 10px;
+      display: none; /* Nascondiamo i pulsanti finché il gioco non finisce */
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="gameContainer">
+    <h1>Tap IQ Game</h1>
+    <div id="grid"></div>
+    <div id="score">Score: 0</div>
+    <div id="timer">Time left: 10s</div>
+    <div id="gameOver">Game Over!</div>
+    <button id="startButton">Start</button>
+    <button id="newGameButton">Start New Game</button>
+
+    <div id="leaderboard">
+      <h2>Classifica</h2>
+      <ul id="leaderboardList"></ul>
+      <button id="newGameFromLeaderboardButton">Nuova Partita</button>
+    </div>
+  </div>
+
+  <script>
+    const gridSize = 4;
+    let score = 0;
+    let timeLeft = 10;
+    let activeCell = null;
+    let gameInterval;
+    let timerInterval;
+    let correctClicks = 0;
+    let cellInterval = 1000;
+    const cellIntervalDecrease = 100;
+    const minCellInterval = 300;
+    const clicksToIncreaseSpeed = 10;
+    const gridElement = document.getElementById('grid');
+    const scoreElement = document.getElementById('score');
+    const timerElement = document.getElementById('timer');
+    const gameOverElement = document.getElementById('gameOver');
+    const startButton = document.getElementById('startButton');
+    const newGameButton = document.getElementById('newGameButton');
+    const newGameFromLeaderboardButton = document.getElementById('newGameFromLeaderboardButton');
+    const leaderboardElement = document.getElementById('leaderboard');
+    let leaderboard = [];
+
+    // Carica i dati salvati dal localStorage
+    function loadLeaderboard() {
+      const savedLeaderboard = localStorage.getItem('leaderboard');
+      if (savedLeaderboard) {
+        leaderboard = JSON.parse(savedLeaderboard);
+        updateLeaderboardList();
+      }
+    }
+
+    // Salva la classifica nel localStorage
+    function saveLeaderboard() {
+      localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+    }
+
+    // Funzione aggiornata per calcolare il QI
+    function calculateIQ(taps) {
+      let qi = (taps * 120) / 50;
+
+      if (qi < 50) {
+        return 50;
+      } else if (qi > 200) {
+        return 200;
+      } else {
+        return Math.round(qi);
+      }
+    }
+
+    // Aggiungi un nuovo giocatore alla classifica e aggiorna la lista
+    function updateLeaderboard(name, score, taps) {
+      const iq = calculateIQ(taps);
+      leaderboard.push({ name, score, iq });
+
+      leaderboard.sort((a, b) => b.score - a.score);
+
+      saveLeaderboard();
+      updateLeaderboardList();
+    }
+
+    // Aggiorna la visualizzazione della classifica
+    function updateLeaderboardList() {
+      const leaderboardList = document.getElementById('leaderboardList');
+      leaderboardList.innerHTML = '';
+      leaderboard.forEach((player, index) => {
+        const li = document.createElement('li');
+        li.textContent = `${index + 1}. ${player.name} - Score: ${player.score}, QI: ${player.iq}`;
+        leaderboardList.appendChild(li);
+      });
+    }
+
+    // Avvia una nuova partita dalla classifica
+    newGameFromLeaderboardButton.addEventListener('click', function () {
+      resetGame();
+      createGrid();
+      gridElement.style.display = 'grid';
+
+      score = 0;
+      correctClicks = 0;
+      timeLeft = 10;
+
+      scoreElement.textContent = `Score: ${score}`;
+      timerElement.textContent = `Time left: ${timeLeft}s`;
+      gameOverElement.style.display = 'none';
+      newGameButton.style.display = 'none';
+      newGameFromLeaderboardButton.style.display = 'none'; // Nasconde il pulsante "Nuova Partita"
+
+      startGame();
+    });
+
+    // Creazione della griglia di gioco
+    function createGrid() {
+      gridElement.innerHTML = '';
+      gridElement.style.gridTemplateColumns = `repeat(${gridSize}, 80px)`;
+      gridElement.style.gridTemplateRows = `repeat(${gridSize}, 80px)`;
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.addEventListener('click', handleCellClick);
+        gridElement.appendChild(cell);
+      }
+    }
+
+    // Start the game when the Start button is clicked
+    startButton.addEventListener('click', function () {
+      startButton.style.display = 'none';
+      newGameButton.style.display = 'none';
+      resetGame();
+      createGrid();
+      gridElement.style.display = 'grid';
+      score = 0;
+      correctClicks = 0;
+      timeLeft = 10;
+      scoreElement.textContent = `Score: ${score}`;
+      timerElement.textContent = `Time left: ${timeLeft}s`;
+      gameOverElement.style.display = 'none';
+      startGame();
+    });
+
+    function resetGame() {
+      clearInterval(gameInterval);
+      clearInterval(timerInterval);
+      cellInterval = 1000;
+    }
+
+    function startGame() {
+      gameInterval = setInterval(activateRandomCell, cellInterval);
+      timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    function activateRandomCell() {
+      if (activeCell) {
+        activeCell.classList.remove('active');
+      }
+      const randomIndex = Math.floor(Math.random() * gridSize * gridSize);
+      const cells = document.querySelectorAll('.cell');
+      activeCell = cells[randomIndex];
+      activeCell.classList.add('active');
+    }
+
+    function handleCellClick(event) {
+      if (event.target === activeCell) {
+        score++;
+        correctClicks++;
+        scoreElement.textContent = `Score: ${score}`;
+        activeCell.classList.remove('active');
+        activeCell = null;
+        timeLeft += 1;
+        timerElement.textContent = `Time left: ${timeLeft}s`;
+
+        if (correctClicks % clicksToIncreaseSpeed === 0 && cellInterval > minCellInterval) {
+          cellInterval = Math.max(cellInterval - cellIntervalDecrease, minCellInterval);
+          clearInterval(gameInterval);
+          gameInterval = setInterval(activateRandomCell, cellInterval);
+        }
+      }
+    }
+
+    function updateTimer() {
+      timeLeft--;
+      timerElement.textContent = `Time left: ${timeLeft}s`;
+
+      if (timeLeft <= 0) {
+        clearInterval(gameInterval);
+        clearInterval(timerInterval);
+        gameOverElement.style.display = 'block';
+        gridElement.style.display = 'none';
+        newGameButton.style.display = 'inline';
+
+        const playerName = prompt('Inserisci il tuo nome per la classifica:');
+        if (playerName) {
+          updateLeaderboard(playerName, score, correctClicks);
+        }
+
+        newGameFromLeaderboardButton.style.display = 'inline'; // Mostra il pulsante "Nuova Partita"
+      }
+    }
+
+    // Carica i dati della classifica al caricamento della pagina
+    loadLeaderboard();
+  </script>
+
+</body>
+
+</html>
